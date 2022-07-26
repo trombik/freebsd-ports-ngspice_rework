@@ -2,6 +2,7 @@
 
 PORTNAME=	ngspice_rework
 PORTVERSION=	36
+PORTREVISION=	1
 CATEGORIES=	cad
 MASTER_SITES=	SF/ngspice/ng-spice-rework/${PORTVERSION}
 DISTNAME=	ngspice-${PORTVERSION}
@@ -17,33 +18,42 @@ BROKEN_aarch64=	fails to link: missing sbrk
 
 LIB_DEPENDS=	libfftw3.so:math/fftw3
 
-FLAVORS=	x11 shlib
-shlib_PKGNAMESUFFIX=		-shlib
-shlib_PLIST=			${MASTERDIR}/pkg-plist-shlib
-
-USES=		compiler:c11 gmake libtool ncurses readline autoreconf pkgconfig
+USES=		compiler:c11 gmake libtool ncurses readline autoreconf pkgconfig xorg
 
 GNU_CONFIGURE=	yes
-CONFIGURE_ARGS=	--enable-cider --enable-xspice --with-readline=yes
 
 OPTIONS_DEFINE=	DEBUG
 
-.if ${FLAVOR:U} ==	shlib
+USE_XORG=	ice sm x11 xaw xext xmu xt xft
 USE_LDCONFIG=		yes
-CONFIGURE_ARGS+=	--with-ngshared --enable-shared
-.else
-USES+=			xorg
-USE_XORG=		ice sm x11 xaw xext xmu xt xft
-CONFIGURE_ARGS+=	--with-x
-PLIST_FILES=		bin/ngspice man/man1/ngspice.1.gz
-post-install:
-	@cd ${STAGEDIR}${PREFIX} && \
-		${RM} -r include lib share && \
-		${RM} bin/cmpp man/man1/cmpp.1
-.endif
-
+SHLIB_CONFIGURE_ARGS=	--with-ngshared
+CONFIGURE_ARGS+=	--enable-cider --enable-xspice --with-readline=yes --enable-shared --with-x
 DEBUG_CONFIGURE_ENABLE=	debug
 
 INSTALL_TARGET=	install-strip
+
+post-build:
+	# as the configure does not allow to build shlib and the binary at the
+	# same time, run configure again after building the binary.
+	cd ${WRKSRC} && \
+		${SETENV} CC="${CC}" CPP="${CPP}" CXX="${CXX}" \
+	    CFLAGS="${CFLAGS}" CPPFLAGS="${CPPFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+	    LDFLAGS="${LDFLAGS}" LIBS="${LIBS}" \
+	    INSTALL="/usr/bin/install -c" \
+	    INSTALL_DATA="${INSTALL_DATA}" \
+	    INSTALL_LIB="${INSTALL_LIB}" \
+	    INSTALL_PROGRAM="${INSTALL_PROGRAM}" \
+	    INSTALL_SCRIPT="${INSTALL_SCRIPT}" \
+	    ${CONFIGURE_ENV} ${CONFIGURE_CMD} `echo ${CONFIGURE_ARGS} | sed -e 's/--with-x//'` ${SHLIB_CONFIGURE_ARGS}
+
+	cd ${WRKSRC} && \
+		${SETENV} ${MAKE_ENV} ${MAKE_CMD} ${MAKE_FLAGS} ${MAKEFILE} ${_MAKE_JOBS} ${MAKE_ARGS:N${DESTDIRNAME}=*}
+
+post-install:
+	# install the binary as do-install installs shlib, but not the binary
+	${INSTALL_PROGRAM} ${WRKSRC}/src/ngspice ${STAGEDIR}${PREFIX}/bin/ngspice
+	${INSTALL_MAN} ${WRKSRC}/man/man1/ngspice.1 ${STAGEDIR}${MAN1PREFIX}/man/man1/ngspice.1
+	@cd ${STAGEDIR}${PREFIX} && \
+		${RM} bin/cmpp man/man1/cmpp.1
 
 .include <bsd.port.mk>

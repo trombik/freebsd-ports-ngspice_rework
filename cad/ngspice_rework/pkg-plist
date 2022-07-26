@@ -1,3 +1,5 @@
+bin/ngspice
+man/man1/ngspice.1.gz
 libdata/pkgconfig/ngspice.pc
 lib/libngspice.so
 lib/libngspice.so.0

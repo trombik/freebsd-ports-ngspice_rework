@@ -21,20 +21,24 @@ LIB_DEPENDS=	libfftw3.so:math/fftw3
 USES=		compiler:c11 gmake libtool ncurses readline autoreconf pkgconfig xorg
 
 GNU_CONFIGURE=	yes
+DEFAULT_CONFIGURE_ARGS=	--enable-cider --enable-xspice --with-readline=yes --enable-shared
 
 OPTIONS_DEFINE=	DEBUG
 
 USE_XORG=	ice sm x11 xaw xext xmu xt xft
 USE_LDCONFIG=		yes
 SHLIB_CONFIGURE_ARGS=	--with-ngshared
-CONFIGURE_ARGS+=	--enable-cider --enable-xspice --with-readline=yes --enable-shared --with-x
+X11_CONFIGURE_ARGS=	--with-x
+CONFIGURE_ARGS+=	${DEFAULT_CONFIGURE_ARGS} ${SHLIB_CONFIGURE_ARGS}
 DEBUG_CONFIGURE_ENABLE=	debug
 
 INSTALL_TARGET=	install-strip
 
 post-build:
 	# as the configure does not allow to build shlib and the binary at the
-	# same time, run configure again after building the binary.
+	# same time, run configure again after building the shlib.
+	# XXX shlib must be built before the binary due to an interesting build
+	# system.
 	cd ${WRKSRC} && \
 		${SETENV} CC="${CC}" CPP="${CPP}" CXX="${CXX}" \
 	    CFLAGS="${CFLAGS}" CPPFLAGS="${CPPFLAGS}" CXXFLAGS="${CXXFLAGS}" \
@@ -44,15 +48,20 @@ post-build:
 	    INSTALL_LIB="${INSTALL_LIB}" \
 	    INSTALL_PROGRAM="${INSTALL_PROGRAM}" \
 	    INSTALL_SCRIPT="${INSTALL_SCRIPT}" \
-	    ${CONFIGURE_ENV} ${CONFIGURE_CMD} `echo ${CONFIGURE_ARGS} | sed -e 's/--with-x//'` ${SHLIB_CONFIGURE_ARGS}
+	    ${CONFIGURE_ENV} ${CONFIGURE_CMD} `${ECHO} ${CONFIGURE_ARGS} | ${SED} -e 's/--with-ngshared//'` ${X11_CONFIGURE_ARGS}
 
 	cd ${WRKSRC} && \
 		${SETENV} ${MAKE_ENV} ${MAKE_CMD} ${MAKE_FLAGS} ${MAKEFILE} ${_MAKE_JOBS} ${MAKE_ARGS:N${DESTDIRNAME}=*}
 
 post-install:
-	# install the binary as do-install installs shlib, but not the binary
-	${INSTALL_PROGRAM} ${WRKSRC}/src/ngspice ${STAGEDIR}${PREFIX}/bin/ngspice
-	${INSTALL_MAN} ${WRKSRC}/man/man1/ngspice.1 ${STAGEDIR}${MAN1PREFIX}/man/man1/ngspice.1
+	# install the shlib as do-install installs the binary, but not the shlib
+	${INSTALL} -d ${STAGEDIR}${PREFIX}/include/ngspice
+	${INSTALL_LIB} ${WRKSRC}/src/.libs/libngspice.so ${STAGEDIR}${PREFIX}/lib/
+	${INSTALL_LIB} ${WRKSRC}/src/.libs/libngspice.so.0 ${STAGEDIR}${PREFIX}/lib/
+	${INSTALL_LIB} ${WRKSRC}/src/.libs/libngspice.so.0.0.2 ${STAGEDIR}${PREFIX}/lib/
+	${INSTALL_DATA} ${WRKSRC}/src/include/ngspice/sharedspice.h ${STAGEDIR}${PREFIX}/include/ngspice/
+	${INSTALL_DATA} ${WRKSRC}/ngspice.pc ${STAGEDIR}${PREFIX}/libdata/pkgconfig/
+
 	@cd ${STAGEDIR}${PREFIX} && \
 		${RM} bin/cmpp man/man1/cmpp.1
 
